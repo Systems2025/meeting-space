@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Meeting Space</title>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Link to your CSS file -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar-nav">
+            <div class="logo-icon">SB</div> <!-- Space Booker -->
+            <a href="#" class="nav-icon active"><i class="fas fa-calendar-plus"></i></a>
+            <a href="#" class="nav-icon"><i class="fas fa-home"></i></a>
+            <a href="#" class="nav-icon"><i class="fas fa-building"></i></a>
+            <a href="#" class="nav-icon"><i class="fas fa-cog"></i></a>
+            <a href="#" class="nav-icon profile-icon"><i class="fas fa-user"></i></a>
+        </aside>
+
+        <main class="main-content">
+            <section class="left-details-panel">
+                <form id="spaceBookingForm">
+                    <h2>Booking Details</h2>
+                    <div class="input-group">
+                        <label for="bookedBy">Booked By (Organizer):</label>
+                        <input type="text" id="bookedBy" name="Booked By" placeholder="Your Name or Email" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="purpose">Purpose / Attendees (Optional):</label>
+                        <textarea id="purpose" name="Purpose" placeholder="e.g., Team Meeting. Add attendees if needed."></textarea>
+                    </div>
+
+                    <div class="booking-summary">
+                        <h3>Booking Summary</h3>
+                        <div class="summary-item">
+                            <i class="fas fa-map-marker-alt icon"></i>
+                            <div>
+                                <span class="summary-label">SPACE</span>
+                                <span id="summarySpace">Select a space</span>
+                            </div>
+                        </div>
+                        <div class="summary-item">
+                            <i class="fas fa-calendar-alt icon"></i>
+                            <div>
+                                <span class="summary-label">DATE</span>
+                                <span id="summaryDate">Select a date</span>
+                            </div>
+                        </div>
+                        <div class="summary-item">
+                            <i class="fas fa-clock icon"></i>
+                            <div>
+                                <span class="summary-label">TIME</span>
+                                <span id="summaryTime">Select time(s)</span>
+                            </div>
+                        </div>
+                        <div class="summary-item">
+                            <i class="fas fa-hourglass-half icon"></i>
+                            <div>
+                                <span class="summary-label">DURATION (EACH SLOT)</span>
+                                <span id="summaryDuration">1 hour</span>
+                            </div>
+                        </div>
+                        <div class="summary-item">
+                            <i class="fas fa-stopwatch icon"></i>
+                            <div>
+                                <span class="summary-label">TOTAL DURATION</span>
+                                <span id="summaryTotalDuration">0 hours</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="availability-check-section">
+                        <button type="button" id="checkAvailabilityBtn" class="check-availability-btn">
+                            <i class="fas fa-calendar-check"></i> Check Availability
+                        </button>
+                        <div id="availabilityStatus" class="availability-status-box">
+                            Please select a space and date, then check availability.
+                        </div>
+                    </div>
+
+                    <button type="submit" class="schedule-btn">Book Space</button>
+                    <div id="message" class="form-message"></div>
+                </form>
+            </section>
+
+            <section class="right-selection-panel">
+                <div class="panel-header">
+                    <h1>Find & Book a Space</h1>
+                </div>
+
+                <div class="space-selector-container">
+                    <label for="spaceSelectInput" class="section-label">1. Select a Space</label>
+                    <select id="spaceSelectInput" name="SpaceName">
+                        <option value="">-- Choose a Space --</option>
+                        <option value="The Loft">The Loft (Capacity: 10)</option>
+                        <option value="Conference Room A">Conference Room A (Capacity: 20)</option>
+                        <option value="Huddle Space Alpha">Huddle Space Alpha (Capacity: 4)</option>
+                        <option value="The Boardroom">The Boardroom (Capacity: 12)</option>
+                        <!-- Add more spaces as needed -->
+                    </select>
+                </div>
+
+                <div class="calendar-and-time-wrapper">
+                    <div class="calendar-section">
+                        <label class="section-label">2. Select Date</label>
+                        <div class="calendar-container">
+                            <div class="calendar-header">
+                                <button type="button" id="prevMonth" class="month-nav"><</button>
+                                <span id="currentMonthYear">Month Year</span>
+                                <button type="button" id="nextMonth" class="month-nav">></button>
+                            </div>
+                            <div class="calendar-days-header">
+                                <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                            </div>
+                            <div id="calendarDays" class="calendar-days-grid"></div>
+                        </div>
+                    </div>
+
+                    <div class="time-selection-section">
+                        <label class="section-label">3. Select Duration & Time(s)</label>
+                        <div class="duration-selector">
+                            <label for="duration">Duration (per slot):</label>
+                            <select id="duration" name="Duration">
+                                <option value="1">1 hour</option>
+                                <option value="0.5">30 minutes</option>
+                                <option value="1.5">1.5 hours</option>
+                                <option value="2">2 hours</option>
+                            </select>
+                        </div>
+                        <div id="timeSlotsContainer" class="time-slots-list">
+                            {/* Time slots (checkboxes) will be generated here */}
+                        </div>
+                    </div>
+                </div>
+
+
+                <div class="notification-toggle">
+                    <i class="fas fa-bell"></i>
+                    <span>Confirmation</span>
+                    <label class="switch">
+                        <input type="checkbox" id="sendConfirmation" name="SendConfirmation" checked>
+                        <span class="slider round"></span>
+                    </label>
+                    <span>Send email confirmation</span>
+                </div>
+            </section>
+        </main>
+
+        <!-- Hidden inputs for Airtable submission -->
+        <input type="hidden" id="hiddenStartTime">
+        <input type="hidden" id="hiddenEndTime">
+        <input type="hidden" id="hiddenTotalDurationHours">
+    </div>
+
+    <!-- Link to your JavaScript file -->
+    <script src="script.js"></script>
+</body>
+</html>
