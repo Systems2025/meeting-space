@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- CONFIGURATION ---
     // WARNING: EXPOSING THESE URLS CLIENT-SIDE IS A SECURITY RISK FOR PRODUCTION.
     // USE A SERVERLESS FUNCTION PROXY IN A REAL APPLICATION.
-    const ZAPIER_CHECK_AVAILABILITY_WEBHOOK_URL = 'https://hooks.zapier.com/hooks/catch/20644786/27k3jm6/'; // <-- REPLACE WITH YOUR ACTUAL ZAPIER URL
+    const ZAPIER_CHECK_AVAILABILITY_WEBHOOK_URL = 'https://hooks.zapier.com/hooks/catch/YOUR_USER_ID/YOUR_AVAILABILITY_HOOK_ID/'; // <-- REPLACE WITH YOUR ACTUAL ZAPIER URL
     const ZAPIER_SUBMIT_BOOKING_WEBHOOK_URL = 'https://hooks.zapier.com/hooks/catch/YOUR_USER_ID/YOUR_SUBMIT_HOOK_ID/';     // <-- REPLACE WITH YOUR ACTUAL ZAPIER URL
 
     // DOM Elements
@@ -39,13 +39,36 @@ document.addEventListener('DOMContentLoaded', function() {
     let selectedSpace = spaceSelectInput.value;
     let selectedDate = null;
     let selectedTimeSlots = new Set();
-    let durationPerSlotHours = parseFloat(durationSelect.value);
+    let durationPerSlotHours = 0.5; // Initialize with a default
 
     const availableBaseTimes = [ // Example: 30 min interval base times
         "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
         "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
         "16:00", "16:30", "17:00", "17:30", "18:00"
     ];
+
+    // --- INITIALIZATION ---
+    function initialize() {
+        console.log("Initializing booking system.");
+        if (durationSelect.options.length > 0) {
+            durationPerSlotHours = parseFloat(durationSelect.value);
+            if (isNaN(durationPerSlotHours)) {
+                console.warn("Initial duration from select is NaN, defaulting to 0.5. Check HTML <option> values.");
+                durationPerSlotHours = 0.5;
+                durationSelect.value = "0.5"; // Attempt to set a default if options exist
+            }
+        } else {
+            console.warn("Duration select has no options, defaulting durationPerSlotHours to 0.5.");
+            durationPerSlotHours = 0.5;
+        }
+        console.log("Initial durationPerSlotHours:", durationPerSlotHours);
+
+        renderCalendar();
+        renderTimeSlots(); // Will show placeholder initially as no date is selected
+        updateSummary();   // Will show "Select..." initially
+        resetAvailabilityStatus(); // Will disable scheduleBtn initially
+    }
+
 
     // --- EVENT LISTENERS ---
     spaceSelectInput.addEventListener('change', (e) => {
@@ -61,10 +84,10 @@ document.addEventListener('DOMContentLoaded', function() {
         durationPerSlotHours = parseFloat(e.target.value);
         console.log('Duration selected (hours):', durationPerSlotHours);
         if (isNaN(durationPerSlotHours)) {
-            console.error("Selected duration is NaN. Check option values in HTML.");
+            console.error("Selected duration is NaN. Check option values in HTML. Falling back to 0.5.");
             durationPerSlotHours = 0.5; // Fallback to a default
         }
-        selectedTimeSlots.clear();
+        selectedTimeSlots.clear(); // Clear slots as duration change invalidates them
         renderTimeSlots();
         updateSummary();
         resetAvailabilityStatus();
@@ -73,11 +96,19 @@ document.addEventListener('DOMContentLoaded', function() {
     prevMonthBtn.addEventListener('click', () => {
         currentDisplayedDate.setMonth(currentDisplayedDate.getMonth() - 1);
         renderCalendar();
+        selectedTimeSlots.clear(); // Clear time slots when month changes
+        renderTimeSlots();
+        updateSummary();
+        resetAvailabilityStatus();
     });
 
     nextMonthBtn.addEventListener('click', () => {
         currentDisplayedDate.setMonth(currentDisplayedDate.getMonth() + 1);
         renderCalendar();
+        selectedTimeSlots.clear(); // Clear time slots when month changes
+        renderTimeSlots();
+        updateSummary();
+        resetAvailabilityStatus();
     });
 
     checkAvailabilityBtn.addEventListener('click', async function() {
@@ -95,10 +126,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const checkData = {
             space: selectedSpace,
             date: selectedDate.toISOString().split('T')[0], // YYYY-MM-DD
-            // Optionally send durationPerSlotHours if your Zapier logic needs it to calculate display slots
-            durationPerSlotHours: durationPerSlotHours
+            durationPerSlotHours: durationPerSlotHours // Send current slot duration
         };
-        console.log("Checking availability with data:", checkData);
+        console.log("Checking availability with data:", JSON.stringify(checkData));
 
         try {
             const response = await fetch(ZAPIER_CHECK_AVAILABILITY_WEBHOOK_URL, {
@@ -126,7 +156,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('.time-slot-item.externally-booked').forEach(el => {
                 el.classList.remove('externally-booked');
                 const cb = el.querySelector('input[type="checkbox"]');
-                if (cb && !cb.parentElement.classList.contains('disabled')) { // Don't re-enable past slots
+                if (cb && !el.classList.contains('disabled')) { // Don't re-enable past slots
                      cb.disabled = false;
                 }
             });
@@ -137,11 +167,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 availabilityStatusBox.classList.add('available');
                 scheduleBtn.disabled = false;
             } else if (result.status === 'partially_booked') {
-                let messageText = result.message || 'Some slots are taken.';
-                availabilityStatusBox.textContent = ''; // Clear before adding elements
+                availabilityStatusBox.innerHTML = ''; // Clear before adding new elements
 
                 const messageP = document.createElement('p');
-                messageP.textContent = messageText;
+                messageP.textContent = result.message || 'Some slots are taken.';
                 availabilityStatusBox.appendChild(messageP);
 
 
@@ -158,11 +187,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                     availabilityStatusBox.appendChild(p);
                     availabilityStatusBox.appendChild(ul);
-                    // Assuming 'booked_slots' are like "09:00 - 09:30", extract start time
+
                     const bookedStartTimes = result.booked_slots.map(s => {
-                        if (typeof s === 'string') return s.split(' - ')[0];
-                        return null; // Or handle error
-                    }).filter(Boolean); // Remove nulls
+                        if (typeof s === 'string' && s.includes(' - ')) return s.split(' - ')[0].trim();
+                        console.warn("Unexpected booked_slot format:", s);
+                        return null;
+                    }).filter(Boolean);
                     console.log("Marking as booked based on start times:", bookedStartTimes);
                     markSlotsAsBooked(bookedStartTimes);
                 } else {
@@ -240,11 +270,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     const prevSelected = calendarDaysGrid.querySelector('.selected-day');
                     if (prevSelected) prevSelected.classList.remove('selected-day');
-                    selectedDate = new Date(currentDateLoop); // Ensure it's a new Date object
+                    selectedDate = new Date(currentDateLoop.getFullYear(), currentDateLoop.getMonth(), currentDateLoop.getDate()); // Ensure only date part
                     console.log('Date selected in calendar:', selectedDate);
                     dayCell.classList.add('selected-day');
                     selectedTimeSlots.clear();
-                    renderTimeSlots(); // This should now have a valid selectedDate
+                    renderTimeSlots();
                     updateSummary();
                     resetAvailabilityStatus();
                 });
@@ -263,20 +293,20 @@ document.addEventListener('DOMContentLoaded', function() {
             console.warn("formatTime received an invalid Date object:", dateObj);
             return "Invalid Time";
         }
-        return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }); // Using 24-hour format for consistency with availableBaseTimes
+        return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }); // Using 24-hour format
     }
 
     function getTimeSlotEnd(startTimeStr, durationHours) {
         if (typeof startTimeStr !== 'string' || !startTimeStr.includes(':')) {
             console.error("Invalid startTimeStr for getTimeSlotEnd:", startTimeStr);
-            return "00:00"; // Fallback
+            return "00:00";
         }
         if (isNaN(durationHours) || durationHours <= 0) {
-            console.error("Invalid durationHours for getTimeSlotEnd:", durationHours);
-            return startTimeStr; // Fallback
+            console.warn("Invalid durationHours for getTimeSlotEnd:", durationHours, "using startTimeStr as fallback.");
+            return startTimeStr;
         }
         const [hours, minutes] = startTimeStr.split(':').map(Number);
-        const startDate = new Date(2000, 0, 1, hours, minutes); // Use a dummy date for time calculations
+        const startDate = new Date(2000, 0, 1, hours, minutes);
         const endDate = new Date(startDate.getTime() + durationHours * 60 * 60 * 1000);
         return `${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}`;
     }
@@ -291,6 +321,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // console.log("RenderTimeSlots: No space or date selected. SelectedDate:", selectedDate);
             return;
         }
+        if (isNaN(durationPerSlotHours) || durationPerSlotHours <= 0) {
+            console.error("RenderTimeSlots: Invalid durationPerSlotHours, cannot render slots.", durationPerSlotHours);
+             const errorP = document.createElement('p');
+            errorP.textContent = "Invalid slot duration selected.";
+            errorP.style.textAlign = "center"; errorP.style.color = "red";
+            timeSlotsContainer.appendChild(errorP);
+            return;
+        }
         // console.log("RenderTimeSlots: Rendering for date:", selectedDate, "and duration per slot:", durationPerSlotHours);
 
         availableBaseTimes.forEach((baseStartTime, index) => {
@@ -303,8 +341,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const slotEndTimeStr = getTimeSlotEnd(baseStartTime, durationPerSlotHours);
             const [endH, endM] = slotEndTimeStr.split(':').map(Number);
             const dummyEndDateForDisplay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), endH, endM);
-
-            // console.log(`Slot ${baseStartTime}: StartObj: ${dummyStartDateForDisplay}, EndObj: ${dummyEndDateForDisplay}`);
 
             label.textContent = `${formatTime(dummyStartDateForDisplay)} - ${formatTime(dummyEndDateForDisplay)}`;
             slotItem.append(checkbox, label);
@@ -322,7 +358,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     if (checkbox.checked) { selectedTimeSlots.add(baseStartTime); slotItem.classList.add('selected-time'); }
                     else { selectedTimeSlots.delete(baseStartTime); slotItem.classList.remove('selected-time'); }
-                    // console.log('Selected time slots updated:', selectedTimeSlots);
+                    // console.log('Selected time slots updated:', new Set(selectedTimeSlots));
                     updateSummary();
                 });
             }
@@ -332,21 +368,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- UPDATE SUMMARY & HIDDEN FIELDS ---
     function updateSummary() {
-        summarySpaceElem.textContent = selectedSpace && spaceSelectInput.options[spaceSelectInput.selectedIndex] ? spaceSelectInput.options[spaceSelectInput.selectedIndex].text.split(' (')[0] : "Select a space";
+        const spaceOption = spaceSelectInput.options[spaceSelectInput.selectedIndex];
+        summarySpaceElem.textContent = selectedSpace && spaceOption ? spaceOption.text.split(' (')[0] : "Select a space";
         summaryDateElem.textContent = selectedDate ? selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }) : "Select a date";
         const durationOption = durationSelect.options[durationSelect.selectedIndex];
         summaryDurationElem.textContent = durationOption ? durationOption.text : "Select duration";
 
         // console.log('updateSummary called. Selected Date:', selectedDate, 'Selected Time Slots:', new Set(selectedTimeSlots), 'Duration per slot:', durationPerSlotHours);
 
-
         if (selectedTimeSlots.size > 0 && selectedDate && !isNaN(durationPerSlotHours) && durationPerSlotHours > 0) {
             const sortedSlots = Array.from(selectedTimeSlots).sort();
             const firstSlotStartStr = sortedSlots[0];
             const lastSlotStartStr = sortedSlots[sortedSlots.length - 1];
-
-            // console.log('UpdateSummary - Sorted Slots for Summary:', sortedSlots);
-            // console.log('UpdateSummary - First Slot:', firstSlotStartStr, 'Last Slot:', lastSlotStartStr);
 
             const [firstH, firstM] = firstSlotStartStr.split(':').map(Number);
             const overallStartTimeObj = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), firstH, firstM);
@@ -354,9 +387,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const lastSlotEndTimeStr = getTimeSlotEnd(lastSlotStartStr, durationPerSlotHours);
             const [lastEndH, lastEndM] = lastSlotEndTimeStr.split(':').map(Number);
             const overallEndTimeObj = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), lastEndH, lastEndM);
-
-            // console.log('UpdateSummary - Overall Start Time Obj:', overallStartTimeObj, 'Is Valid:', !isNaN(overallStartTimeObj));
-            // console.log('UpdateSummary - Overall End Time Obj:', overallEndTimeObj, 'Is Valid:', !isNaN(overallEndTimeObj));
 
             summaryTimeElem.textContent = `${formatTime(overallStartTimeObj)} - ${formatTime(overallEndTimeObj)} (Overall)`;
             hiddenStartTimeInput.value = overallStartTimeObj.toISOString();
@@ -366,7 +396,6 @@ document.addEventListener('DOMContentLoaded', function() {
             summaryTotalDurationElem.textContent = `${totalDuration} hour${totalDuration !== 1 ? 's' : ''}`;
             hiddenTotalDurationHoursInput.value = totalDuration;
         } else {
-            // console.log('UpdateSummary: Conditions not met for time calculation. Slots size:', selectedTimeSlots.size, 'Date:', selectedDate, 'Duration:', durationPerSlotHours);
             summaryTimeElem.textContent = "Select time(s)";
             summaryTotalDurationElem.textContent = "0 hours";
             hiddenStartTimeInput.value = ""; hiddenEndTimeInput.value = ""; hiddenTotalDurationHoursInput.value = "";
@@ -390,6 +419,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!selectedSpace) { messageDiv.textContent = 'Please select a space.'; messageDiv.className = 'form-message error'; scheduleBtn.disabled = originalScheduleBtnState; return; }
         if (!selectedDate || selectedTimeSlots.size === 0) { messageDiv.textContent = 'Please select a date and at least one time slot.'; messageDiv.className = 'form-message error'; scheduleBtn.disabled = originalScheduleBtnState; return; }
         if (!bookedByInput.value.trim()) { messageDiv.textContent = 'Please enter who is booking the space.'; messageDiv.className = 'form-message error'; scheduleBtn.disabled = originalScheduleBtnState; return; }
+        if (isNaN(durationPerSlotHours) || durationPerSlotHours <=0) { messageDiv.textContent = 'Invalid slot duration selected.'; messageDiv.className = 'form-message error'; scheduleBtn.disabled = originalScheduleBtnState; return; }
+
 
         if (!availabilityStatusBox.classList.contains('available') && !availabilityStatusBox.classList.contains('partially-booked')) {
             if (!confirm("Availability status is not marked as 'Available' or 'Partially Booked'. This might result in a double booking. Do you still want to proceed?")) {
@@ -463,7 +494,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 messageDiv.textContent = errorMsg;
                 messageDiv.classList.add('error');
             }
-        } catch (error) { // Removed underscore from catch variable
+        } catch (error) {
             console.error('Network or other error during booking submission:', error);
             messageDiv.textContent = 'Network error during booking. ' + error.message;
             messageDiv.className = 'form-message error';
@@ -475,7 +506,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     scheduleBtn.disabled = true;
                 }
             }
-            // On success, resetFormAndSelections handles disabling the button.
         }
     });
 
@@ -484,15 +514,29 @@ document.addEventListener('DOMContentLoaded', function() {
         spaceBookingForm.reset();
         sendConfirmationCheckbox.checked = true;
 
-        selectedSpace = spaceSelectInput.options.length > 0 ? spaceSelectInput.options[0].value : ""; // Reset to first option or empty
-        spaceSelectInput.value = selectedSpace;
+        if (spaceSelectInput.options.length > 0) {
+            selectedSpace = spaceSelectInput.options[0].value;
+            spaceSelectInput.value = selectedSpace;
+        } else {
+            selectedSpace = "";
+            spaceSelectInput.value = "";
+        }
+
 
         selectedDate = null;
         selectedTimeSlots.clear();
 
-        durationPerSlotHours = durationSelect.options.length > 0 ? parseFloat(durationSelect.options[0].value) : 0.5;
-        durationSelect.value = durationPerSlotHours;
-        if(isNaN(durationPerSlotHours)) durationPerSlotHours = 0.5; // fallback
+        if (durationSelect.options.length > 0) {
+            durationPerSlotHours = parseFloat(durationSelect.options[0].value);
+            durationSelect.value = durationSelect.options[0].value;
+            if(isNaN(durationPerSlotHours)) {
+                console.warn("Default duration from select is NaN after reset, defaulting to 0.5.");
+                durationPerSlotHours = 0.5;
+            }
+        } else {
+            durationPerSlotHours = 0.5;
+        }
+
 
         const prevSelectedDay = calendarDaysGrid.querySelector('.selected-day');
         if (prevSelectedDay) prevSelectedDay.classList.remove('selected-day');
@@ -501,7 +545,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.time-slot-item.externally-booked').forEach(el => {
             el.classList.remove('externally-booked');
             const cb = el.querySelector('input[type="checkbox"]');
-            if (cb && !cb.parentElement.classList.contains('disabled')) cb.disabled = false;
+            if (cb && !el.classList.contains('disabled')) cb.disabled = false;
         });
         document.querySelectorAll('.time-slot-item input[type="checkbox"]').forEach(cb => cb.checked = false);
 
@@ -511,18 +555,6 @@ document.addEventListener('DOMContentLoaded', function() {
         messageDiv.textContent = ''; messageDiv.className = 'form-message';
     }
 
-    // --- INITIAL RENDER ---
-    console.log("Initializing booking system. Default duration:", durationPerSlotHours);
-    if (isNaN(durationPerSlotHours) && durationSelect.options.length > 0) { // Ensure durationPerSlotHours is valid on init
-        durationPerSlotHours = parseFloat(durationSelect.options[0].value);
-         if(isNaN(durationPerSlotHours)) durationPerSlotHours = 0.5; // Final fallback
-    } else if (isNaN(durationPerSlotHours)) {
-        durationPerSlotHours = 0.5; // Absolute fallback if no options
-    }
-
-
-    renderCalendar();
-    renderTimeSlots(); // Will show placeholder initially as no date is selected
-    updateSummary();   // Will show "Select..." initially
-    resetAvailabilityStatus(); // Will disable scheduleBtn initially
+    // --- INITIALIZE THE SCRIPT ---
+    initialize();
 });
