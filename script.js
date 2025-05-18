@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     // --- CONFIGURATION ---
-    const ZAPIER_CHECK_AVAILABILITY_WEBHOOK_URL = 'https://hook.eu2.make.com/g4ps2ybsu0561400xn9gzgj79k1vuwdg'; // <-- REPLACE
+    const ZAPIER_CHECK_AVAILABILITY_WEBHOOK_URL = 'https://hooks.zapier.com/hooks/catch/20644786/27k3jm6/'; // <-- REPLACE
     const ZAPIER_SUBMIT_BOOKING_WEBHOOK_URL = 'https://hooks.zapier.com/hooks/catch/20644786/27k2lwr/';     // <-- REPLACE
 
     // DOM Elements
